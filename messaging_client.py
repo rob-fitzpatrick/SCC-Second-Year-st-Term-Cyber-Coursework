@@ -112,6 +112,12 @@ import requests
 # You must use cryptography.io for all cryptographic functions.
 # Your implementation must work on SCC machines.
 # ===========================================================================
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
+from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+import hashlib
 
 
 POLL_INTERVAL = 1.0   # seconds between mailbox checks
@@ -278,6 +284,15 @@ class MessagingClient:
     def create_identity(self, name: str) -> None:
         # 1. Generate this user's long-term key pair(s).
         # <your key generation here>
+        # Generated private key, this is to create a shared key which boths users can use
+        private_key_exchange = X25519PrivateKey.generate()
+        # Generated public key off of private
+        public_key_exchange = private_key_exchange.public_key()
+
+        # keys for proving it came from me
+        private_key_sign = Ed25519PrivateKey.generate()
+        public_key_sign = private_key_sign.public_key()
+
             # ROB: LAB 5 HASHNING - Set client ID, how can you check keys relate to that id - LINK longterm public keys with client ID with hashing
             #  ROB: LAB 7 and 8 - helmen values? signing
             #
@@ -285,10 +300,26 @@ class MessagingClient:
         #    Private keys are saved as base64 text with b64e(...) and rebuilt
         #    by load_keys. 
         # public_info holds ONLY public values: it is sent to the server and to other users.
+
+        # Turning all of the keys into bytes so they can be then encoded into B64 - week 5 lab
+
+        private_key_exchange_bytes = private_key_exchange.private_bytes_raw()
+        public_key_exchange_bytes = public_key_exchange.public_bytes_raw()
+
+        private_key_sign_bytes = private_key_sign.private_bytes_raw()
+        public_key_sign_bytes = public_key_sign.public_bytes_raw()
         
+    
+        # Encoded into b64e - unsure if to do it with public aswel - have hashed out
+        encoded_private_key_exchange = b64e(private_key_exchange_bytes)
+        encoded_public_key_exchange = b64e(public_key_exchange_bytes)
+        encoded_private_key_sign = b64e(private_key_sign_bytes)
+        encoded_public_key_sign = b64e(public_key_sign_bytes)
+        
+        # Stored the encoded private and public keys in a dictionary with the Cipher as the ID part of the dict
         self.state.update({
-            "identity_priv": "",      # b64e(...) of each long-term private key
-            "public_info": {},        # the public values others need (public keys, etc.)
+            "identity_priv": {"X25519": encoded_private_key_exchange, "ED25519": encoded_private_key_sign},      # b64e(...) of each long-term private key
+            "public_info": {"X25519": encoded_public_key_exchange, "ED25519": encoded_public_key_sign},        # the public values others need (public keys, etc.)
             "peers": {},              # a dictionary storing the verified public information of other peers you have connected to
             "keys": {},               # a dictionary storing the shared key you have agreed with each peer (as b64e text)
         })
@@ -297,12 +328,12 @@ class MessagingClient:
         #    which must never change for this user. Think about how another
         #    user, given this ID, could check that keys claiming to be yours
         #    really are (see verify_contact_keys).
-        self.state["client_id"] = ""   # <set this>
+        client_id = hashlib.sha256(public_key_exchange_bytes + public_key_sign_bytes).hexdigest()
+        self.state["client_id"] = client_id# <set this>
 
+        print(self.state)
         # 4. Rebuild the key objects (and run on every later start too).
         self.load_keys()
-    
-        raise NotImplementedError("TODO: create_identity")
 
     def load_keys(self) -> None:
         # ROB: LAB 5 - storing keys, exporting it back into its raw bytes - when reload keys, gonna have toi transmit back into bytes
@@ -657,7 +688,7 @@ def main():
     """Start the client and run the command loop: set up the client, start the
     background message checker, then read and act on the user's commands until
     they quit. Provided; you should not need to change it."""
-
+    
     parser = argparse.ArgumentParser(description="Messaging client")
     parser.add_argument("--host", default="localhost")
     parser.add_argument("--port", type=int, default=8443)
