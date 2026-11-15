@@ -351,16 +351,28 @@ class MessagingClient:
         #    text; use b64d(...) to get the bytes).
         # <read your saved key material here>
 
+        # Lab5 knowledge, getting the keys from dictionary then decoding with B64d
+        private_key_exchange_bytes = self.state["identity_priv"]["X25519"]
+        private_key_sign_bytes = self.state["identity_priv"]["ED25519"]
+        private_key_exchange_bytes = b64d(private_key_exchange_bytes)
+        private_key_sign_bytes = b64d(private_key_sign_bytes)
+
+
         # 2. Turn each one back into a key object from the cryptography library
         #    (for example, with a method such as from_private_bytes), and store
         #    it on self so your other methods can use it.
         # self.<your key> = ...
+        # Lab 5 knowledge 0 getting the privatekeyfrom bytes
+        self.private_key_exchange = X25519PrivateKey.from_private_bytes(private_key_exchange_bytes)
+        self.private_key_sign = Ed25519PrivateKey.from_private_bytes(private_key_sign_bytes)
+        
 
         # 3. If your other methods need the matching public keys handy (for
         #    example to build public_info or to compute the client ID), you can
         #    derive and store those here too.
+        self.public_key_exchange = self.private_key_exchange.public_key()
+        self.public_key_sign = self.private_key_sign.public_key()
 
-        raise NotImplementedError("TODO: load_keys")
 
 
 
