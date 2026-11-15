@@ -98,6 +98,15 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 # Your implementation must work on SCC machines.
 # ===========================================================================
 
+import datetime
+import ipaddress
+import sys
+
+from cryptography import x509
+from cryptography.x509.oid import NameOID
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
+import os
 
 INSECURE = False      # True when started with --insecure (Part 2)
 MAX_BODY_BYTES = 64 * 1024
@@ -186,17 +195,41 @@ def setup_server_security(httpd: ThreadingHTTPServer, host: str) -> ThreadingHTT
     Protect the channel between the server and its clients, and return the
     (modified) server. Called once by main, before the server starts accepting
     connections. 
-
     host is the hostname clients will use to reach the server.
     """
     # 1. Set up whatever your chosen secure protocol needs. If the server
     #    proves its identity with external data, create the data and any 
     #    cryptographic keys here. 
+    # Checking if the files exist, if they do not, create the certificate
+    if not (os.path.exists("server_key.pem") and (os.path.exists("server_cert.pem"))):
+     # code copied in from my Week 8 lab (task 2), look to lab file if come back to and not understand
+        key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        subject = issuer = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, host)])
+        cert = x509.CertificateBuilder()
+        cert = cert.subject_name(subject)
+        cert = cert.issuer_name(issuer)
+        cert = cert.public_key(key.public_key())
+        cert = cert.serial_number(x509.random_serial_number())
+        now = datetime.datetime.now(datetime.timezone.utc)
+        cert = cert.not_valid_before(now)
+        cert = cert.not_valid_after(now + datetime.timedelta(days=365))
+        cert = cert.add_extension(x509.SubjectAlternativeName([x509.DNSName(host)]), critical=False)
+        
+        certificate = cert.sign(key, hashes.SHA256())
 
-    # 2. Create any files in the current working directory, only if they are
-    #    missing, and reuse them if they already exist (so the identity does
-    #    not change each start). Keep private files private; clients will need
-    #    the public part (see the client's server_options).
+        key_bytes = key.private_bytes(encoding=serialization.Encoding.PEM, format=serialization.PrivateFormat.PKCS8, encryption_algorithm=serialization.NoEncryption())
+        cert_bytes = certificate.public_bytes(encoding=serialization.Encoding.PEM)
+
+        # 2. Create any files in the current working directory, only if they are
+        #    missing, and reuse them if they already exist (so the identity does
+        #    not change each start). Keep private files private; clients will need
+        #    the public part (see the client's server_options).
+
+        with open("server_key.pem", "wb") as f:
+            f.write(key_bytes)
+
+        with open("server_cert.pem", "wb") as f:
+            f.write(cert_bytes)
 
     # 3. Wrap httpd so the connection is protected, and return it.
     raise NotImplementedError("TODO: setup_server_security")
