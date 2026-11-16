@@ -107,6 +107,9 @@ from cryptography.x509.oid import NameOID
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 import os
+import json
+import ssl
+
 
 INSECURE = False      # True when started with --insecure (Part 2)
 MAX_BODY_BYTES = 64 * 1024
@@ -232,7 +235,12 @@ def setup_server_security(httpd: ThreadingHTTPServer, host: str) -> ThreadingHTT
             f.write(cert_bytes)
 
     # 3. Wrap httpd so the connection is protected, and return it.
-    raise NotImplementedError("TODO: setup_server_security")
+    # lab 8 task 2 update to run over https
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    context.load_cert_chain("server_cert.pem", "server_key.pem")
+    httpd = ThreadingHTTPServer(("localhost", 8443), Handler)
+    httpd.socket = context.wrap_socket(httpd.socket, server_side=True)
+    print("https server listening on https://localhost:8443")
 
 
 # ===========================================================================

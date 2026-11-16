@@ -130,7 +130,7 @@ POLL_INTERVAL = 1.0   # seconds between mailbox checks
 # setup_server_security.
 # ===========================================================================
 
-URL_SCHEME = "http"
+URL_SCHEME = "https"
 
 
 
@@ -400,6 +400,7 @@ class MessagingClient:
         # 1. Work out what your client needs to trust the server. 
         #    This is likely to include files or details written by the server to the current working
         #    directory in setup_server_security.
+        
 
         # 2. Return the option that points requests at it, for example a dict like {"verify": "<the file name>"}. 
         #    Return {} if your design needs nothing extra.
