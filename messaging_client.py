@@ -406,6 +406,7 @@ class MessagingClient:
         #    Return {} if your design needs nothing extra.
         raise NotImplementedError("TODO: server_options")
         """
+        return {"verify": "server_cert.pem"}
 
     def auth_headers(self, method: str, path: str, body: bytes) -> dict:
         # ROB: When sending a message - comes with a header, authenticating your the person who created this message
