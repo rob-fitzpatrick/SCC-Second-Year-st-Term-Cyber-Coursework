@@ -109,6 +109,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 import os
 import json
 import ssl
+import hashlib
 
 
 INSECURE = False      # True when started with --insecure (Part 2)
@@ -238,11 +239,9 @@ def setup_server_security(httpd: ThreadingHTTPServer, host: str) -> ThreadingHTT
     # lab 8 task 2 update to run over https
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     context.load_cert_chain("server_cert.pem", "server_key.pem")
-    httpd = ThreadingHTTPServer(("localhost", 8443), Handler)
     httpd.socket = context.wrap_socket(httpd.socket, server_side=True)
-    print("https server listening on https://localhost:8443")
 
-
+    return httpd
 # ===========================================================================
 # TODO: Identify the user making a request in function get_caller.
 # This is the server's side of SR2, and runs on EVERY request except
@@ -412,13 +411,36 @@ def check_registration(client_id: str, name: str, public_info: dict) -> None:
     """
     # 1. Check public_info is well formed (the fields your clients expect are
     #    present and the right type).
+    if not isinstance(public_info, dict):
+        raise APIError(400, "Invalid information")
+
+    if "X25519" not in public_info or "ED25519" not in public_info:
+        raise APIError(400, "Invalid Public info")
+
+    if not isinstance(public_info["X25519"], str):
+        raise APIError(400, "Invalid Type Public info")
+
+    if not isinstance(public_info["ED25519"], str):
+        raise APIError(400, "Invalid Type Public Info")
+
 
     # 2. Check it really belongs to client_id: the same relationship between
     #    the ID and the keys that a client checks in verify_contact_keys.
 
+    public_key_exchange = public_info["X25519"]
+    public_key_sign = public_info["ED25519"]
+    decoded_public_key_exchange = b64d(public_key_exchange)
+    decoded_public_key_sign = b64d(public_key_sign)
+
+    if len(decoded_public_key_exchange) != 32 or len(decoded_public_key_sign) != 32:
+        raise APIError(400, "Incorrect Length")
+    hashedValue = hashlib.sha256(decoded_public_key_exchange + decoded_public_key_sign).hexdigest()
+    if hashedValue != client_id:
+        raise APIError(400, "Wrong ID")
+    
+    return
     # 3. If anything is wrong, raise APIError(400, ...). Otherwise return
     #    (handle_register will store the user).
-    raise NotImplementedError("TODO: check_registration")
 
 
 
