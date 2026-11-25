@@ -105,6 +105,7 @@ import os
 import sys
 import threading
 import requests
+from datetime import datetime, timezone
 
 # ===========================================================================
 # TODO: Add any imports you need here.
@@ -429,11 +430,24 @@ class MessagingClient:
         # 1. Produce whatever proves this request came from you, using your
         #    long-term key(s) loaded in load_keys. Think about what stops
         #    someone replaying a copy of it later.
+        
+        private_key = self.private_key_sign
+        nonce = os.urandom(16)
+
+        message = encode_fields("auth_headers_request", method, path, body, nonce) 
+        signature = private_key.sign(message)
+
 
         # 2. Return it as headers (a dict of strings). Header values must be
         #    strings, so use b64e(...) for any bytes. Include whatever
         #    get_caller needs to identify you and check the proof.
-        raise NotImplementedError("TODO: auth_headers")
+
+        return {
+            "client_id": self.client_id,
+            "nonce": b64e(nonce),
+            "signature": b64e(signature)
+        }
+
 
     # ----------------------------------------------------------------------
     # PROVIDED - MAY MODIFY: connecting
