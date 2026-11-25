@@ -106,10 +106,13 @@ from cryptography import x509
 from cryptography.x509.oid import NameOID
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey, Ed25519PublicKey
+import cryptography.exceptions
 import os
 import json
 import ssl
 import hashlib
+
 
 
 INSECURE = False      # True when started with --insecure (Part 2)
@@ -181,7 +184,7 @@ LOCK = threading.Lock()  # hold this whenever you read or change shared state
 USERS = {}               # client ID -> {"name": ..., "public_info": {...}}
 NAMES = {}               # username -> client ID (usernames must be unique)
 MAILBOXES = {}           # client ID -> list of envelopes waiting for collection
-
+NONCES = set()
 # ROB - LAB 7 LOCK EXAMPLE
 # ----------------------------------------------------------------------
 # TODO: Protect the channel to clients in function setup_server_security.
@@ -272,17 +275,50 @@ def get_caller(req: Request) -> str:
     """
     # 1. Read the proof the client put in req.headers (see auth_headers), and
     #    the client ID it claims to be.
+    # If not all headers are present, raise error (not checking if they are right, just if they are there)
+    if not (client_id and nonce and signature):
+        raise APIError(401)
+    # Takiung values out of the header and decoded the ones that need decoding
+    client_id = req.headers.get("client-id")
+    nonce = b64d(req.headers.get("nonce"))
+    signature = b64d(req.headers.get("signature"))
+
 
     # 2. Look up that user's registered public information in USERS, and check
     #    the proof against it. Think about what stops someone replaying a copy
     #    of an earlier request. Hold LOCK while reading shared state.
 
+    # Using lock to prevent concurrent accerss? if the id isnt a user - raise error
+    with LOCK:
+        if client_id not in USERS:
+            raise APIError(401)
+
+        # else, get their info out
+        userInfo = USERS[client_id]
+        publicInfo = userInfo["public_info"]
+        encoded_key_sign = publicInfo["ED25519"]
+
+    # get the public key from it. Then use encode fiellds again like auth headers to make the signature again to then verify it using the verify from week 8 lab
+    try:
+        decoded_key_sign = b64d(encoded_key_sign)
+        public_key_sign = Ed25519PublicKey.from_public_bytes(decoded_key_sign)
+        message = encode_fields("auth_headers_request", req.method, req.path, req.raw_body, nonce)
+        public_key_sign.verify(signature, message)
+    # Raise invalid signature if not
+    except (cryptography.exceptions.InvalidSignature, ValueError):
+        raise APIError(401)
+
+    # I have added this to add a layer of protection, as if soemeone gets all the login details, then they could login again and again, but they cannot spoof an random nonce so then this checks against all the nonces that have been in the nonces set i have created at the top
+    with LOCK:
+        if (client_id, nonce) in NONCES:
+            raise APIError(401)
+        NONCES.add((client_id, nonce))
+
+    
     # 3. If the proof is valid, return the client ID. If anything is missing or
     #    fails, raise APIError(401). You may add endpoints to ROUTES if your
     #    design needs them.
-
-    raise NotImplementedError("TODO: get_caller")
-
+    return client_id
 
 # ===========================================================================
 # Endpoints. PROVIDED - MAY MODIFY, DO NOT
