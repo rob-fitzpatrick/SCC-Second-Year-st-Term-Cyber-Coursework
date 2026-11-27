@@ -434,6 +434,7 @@ class MessagingClient:
         private_key = self.private_key_sign
         nonce = os.urandom(16)
 
+        # After looking through cdoe it seems encode_fields is pre made and a good one to use
         message = encode_fields("auth_headers_request", method, path, body, nonce) 
         signature = private_key.sign(message)
 
@@ -521,13 +522,19 @@ class MessagingClient:
         record["client_id"] == peer_id proves nothing.
         """
         # 1. Pull the public information out of the record.
-
+        public_key_exchange = record["public_info"]["X25519"]
+        public_key_sign = record["public_info"]["ED25519"]
         # 2. Check it really belongs to peer_id. Think about how peer_id relates
         #    to the keys (this is the check you designed in create_identity).
         #    Raise SecurityError if the check fails.
-
+        decoded_public_key_exchange = b64d(public_key_exchange)
+        decoded_public_key_sign = b64d(public_key_sign)
+        tempHashId = hashlib.sha256(decoded_public_key_exchange + decoded_public_key_sign).hexdigest()
+        if tempHashId != peer_id:
+            raise SecurityError
+        
         # 3. Return the verified public information.
-        raise NotImplementedError("TODO: verify_contact_keys")
+        return record["public_info"]
 
 
     def agree_key(self, peer_id: str, peer_info: dict) -> bytes:
