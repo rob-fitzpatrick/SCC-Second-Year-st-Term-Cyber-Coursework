@@ -114,7 +114,7 @@ from datetime import datetime, timezone
 # Your implementation must work on SCC machines.
 # ===========================================================================
 from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
+from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey, X25519PublicKey
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
@@ -549,13 +549,20 @@ class MessagingClient:
         """
         # 1. Use your own long-term key(s) and the peer's public information to
         #    compute a shared secret that only the two of you can compute.
-
+        public_key_exchange = b64d(peer_info["X25519"])
+        public_key_exchange = X25519PublicKey.from_public_bytes(public_key_exchange)
+        private_key_exchange = self.private_key_exchange
+        shared_secret_key = private_key_exchange.exchange(public_key_exchange)
+        
         # 2. Turn that secret into a symmetric key (do not use the raw shared
         #    secret directly as a key; derive a key from it).
-
+        derived_key = HKDF(algorithm=hashes.SHA256(), length=32, salt=None, info=b"handshake data").derive(shared_secret_key)
+        
         # 3. Store the key in self.state (keyed by peer_id) so you do not have
         #    to repeat this, and so it survives a restart. Then return it.tImplementedError("TODO: agree_key")
-        raise NotImplementedError("TODO: agree_key")
+        self.state["keys"][peer_id] = b64e(derived_key)
+        self.save_state()
+        return derived_key
 
 
     def send_message(self, peer_id: str, text: str) -> None:
